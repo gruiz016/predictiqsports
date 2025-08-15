@@ -1,0 +1,153 @@
+# api/app/routers_billing.py
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, update
+from datetime import datetime, timezone
+import stripe, uuid
+
+from .auth import get_db, require_auth
+from .config import settings
+from .models import Subscription
+from .stripe_client import ensure_configured, get_price_id
+
+router = APIRouter(prefix="/v1/billing", tags=["billing"])
+
+# ---------- helpers ----------
+async def _upsert_sub(db: AsyncSession, user_id: str, stripe_cust: str | None, stripe_sub: str | None, status_val: str | None, current_period_end: int | None, plan: str | None):
+    # Convert epoch to datetime
+    cpe_dt = datetime.fromtimestamp(current_period_end, tz=timezone.utc) if current_period_end else None
+    existing = (await db.execute(select(Subscription).where(Subscription.user_id == uuid.UUID(user_id)))).scalar_one_or_none()
+    now = datetime.now(tz=timezone.utc)
+    if existing:
+        await db.execute(
+            update(Subscription).where(Subscription.user_id == uuid.UUID(user_id)).values(
+                stripe_customer_id=stripe_cust,
+                stripe_sub_id=stripe_sub,
+                status=status_val,
+                current_period_end=cpe_dt,
+                plan=plan,
+                updated_at=now
+            )
+        )
+    else:
+        db.add(Subscription(
+            id=uuid.uuid4(),
+            user_id=uuid.UUID(user_id),
+            stripe_customer_id=stripe_cust,
+            stripe_sub_id=stripe_sub,
+            status=status_val,
+            current_period_end=cpe_dt,
+            plan=plan,
+            updated_at=now
+        ))
+    await db.commit()
+
+# ---------- endpoints ----------
+
+@router.get("/diagnostics")
+async def diagnostics():
+    return {
+        "has_secret": bool(settings.STRIPE_SECRET_KEY),
+        "monthly_set": bool(settings.STRIPE_PRICE_MONTHLY),
+        "quarterly_set": bool(settings.STRIPE_PRICE_QUARTERLY),
+        "yearly_set": bool(settings.STRIPE_PRICE_YEARLY),
+        "app_base_url": settings.APP_BASE_URL,
+        "api_base_url": settings.API_BASE_URL,
+    }
+
+@router.get("/status")
+async def status_endpoint(user=Depends(require_auth), db: AsyncSession = Depends(get_db)):
+    rec = (await db.execute(select(Subscription).where(Subscription.user_id == user["user"].id))).scalar_one_or_none()
+    if not rec:
+        return {"active": False, "status": None, "plan": None, "current_period_end": None, "stripe_customer_id": None}
+    return {
+        "active": bool(rec.status == "active" and (rec.current_period_end is None or rec.current_period_end > datetime.now(tz=timezone.utc))),
+        "status": rec.status,
+        "plan": rec.plan,
+        "current_period_end": rec.current_period_end.isoformat() if rec.current_period_end else None,
+        "stripe_customer_id": rec.stripe_customer_id,
+    }
+
+@router.post("/checkout-session")
+async def create_checkout_session(plan: str, user=Depends(require_auth), db: AsyncSession = Depends(get_db)):
+    ensure_configured()
+    price_id = get_price_id(plan)
+    session = stripe.checkout.Session.create(
+        mode="subscription",
+        line_items=[{"price": price_id, "quantity": 1}],
+        success_url=f"{settings.APP_BASE_URL}/account?status=success&session_id={{CHECKOUT_SESSION_ID}}",
+        cancel_url=f"{settings.APP_BASE_URL}/pricing?status=cancel",
+        client_reference_id=str(user["user"].id),
+    )
+    return {"url": session.url}
+
+@router.post("/sync-checkout-session")
+async def sync_checkout_session(session_id: str, user=Depends(require_auth), db: AsyncSession = Depends(get_db)):
+    """Fallback when webhooks aren’t running: retrieve the checkout session and update the DB."""
+    ensure_configured()
+    try:
+        sess = stripe.checkout.Session.retrieve(session_id)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Stripe retrieve error: {e}")
+    owner = sess.get("client_reference_id")
+    if owner and owner != str(user["user"].id):
+        raise HTTPException(status_code=403, detail="Session does not belong to this user")
+    sub_id = sess.get("subscription")
+    cust = sess.get("customer")
+    status_val = "active" if sess.get("payment_status") == "paid" else None
+    plan_interval = None
+    cpe = None
+    try:
+        if sub_id:
+            sub = stripe.Subscription.retrieve(sub_id, expand=["items.data.plan"])  # type: ignore[arg-type]
+            cpe = sub.get("current_period_end")
+            items = (sub.get("items") or {}).get("data") or []
+            if items:
+                plan_interval = (items[0].get("plan") or {}).get("interval")
+            if not status_val:
+                status_val = sub.get("status")
+    except Exception:
+        pass
+    await _upsert_sub(db, str(user["user"].id), cust, sub_id, status_val, cpe, plan_interval)
+    return {"ok": True}
+
+@router.post("/portal-session")
+async def create_portal_session(user=Depends(require_auth), db: AsyncSession = Depends(get_db)):
+    rec = (await db.execute(select(Subscription).where(Subscription.user_id == user["user"].id))).scalar_one_or_none()
+    if not rec or not rec.stripe_customer_id:
+        raise HTTPException(status_code=404, detail="No Stripe customer on record. Subscribe first.")
+    ps = stripe.billing_portal.Session.create(
+        customer=rec.stripe_customer_id,
+        return_url=f"{settings.APP_BASE_URL}/account",
+    )
+    return {"url": ps.url}
+
+# ----- Webhook handler -----
+from fastapi import APIRouter as _APIRouter
+webhooks = _APIRouter()
+
+@webhooks.post("/webhooks/stripe")
+async def stripe_webhook(request: Request, db: AsyncSession = Depends(get_db)):
+    payload = await request.body()
+    sig_header = request.headers.get("stripe-signature")
+    if not settings.STRIPE_WEBHOOK_SECRET:
+        return {"ok": True, "skipped": True}
+    try:
+        event = stripe.Webhook.construct_event(payload, sig_header, settings.STRIPE_WEBHOOK_SECRET)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    etype = event["type"]
+    data = event["data"]["object"]
+    if etype == "checkout.session.completed":
+        user_id = data.get("client_reference_id")
+        customer = data.get("customer")
+        subs = data.get("subscription")
+        await _upsert_sub(db, user_id, customer, subs, "active", None, None)
+    elif etype in ("customer.subscription.updated","customer.subscription.created","customer.subscription.deleted"):
+        items = (data.get("items") or {}).get("data") or []
+        plan_interval = (items[0].get("plan") or {}).get("interval") if items else None
+        user_id = (data.get("metadata") or {}).get("user_id")  # optional
+        status_val = data.get("status"); cpe = data.get("current_period_end"); subs = data.get("id"); customer = data.get("customer")
+        if user_id:
+            await _upsert_sub(db, user_id, customer, subs, status_val, cpe, plan_interval)
+    return {"received": True}

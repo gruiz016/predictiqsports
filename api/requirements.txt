@@ -3,3 +3,8 @@ uvicorn[standard]==0.30.0
 pydantic==2.8.2
 python-dotenv==1.0.1
 stripe==9.6.0
+SQLAlchemy==2.0.31
+asyncpg==0.29.0
+greenlet==3.0.3
+passlib[bcrypt]==1.7.4
+PyJWT==2.8.0
