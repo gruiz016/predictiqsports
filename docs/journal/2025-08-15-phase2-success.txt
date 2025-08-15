@@ -1,0 +1,22 @@
+Dev Journal — 2025-08-15 — Phase 2 Stripe success
+------------------------------------------------------
+Status: Manage Billing opens Stripe Customer Portal (Test) and returns to /account.
+
+Key changes from this phase:
+- Stripe webhook forwarding corrected (8080) and STRIPE_WEBHOOK_SECRET loaded.
+- Added success_url with session_id for fallback status sync.
+- Mapped Stripe intervals (month/year + interval_count) to DB plan values (monthly/quarterly/yearly).
+- Implemented /v1/billing/sync-checkout-session for non-webhook environments.
+- Added portal session endpoint that auto-creates a portal configuration if none exists.
+- Added diagnostics endpoints: /v1/billing/diagnostics and /v1/billing/portal-configs.
+
+What to verify now:
+- /account shows Active: true and correct plan.
+- Clicking “Manage billing” opens Customer Portal.
+- Webhook events log when forwarding is running.
+
+Next planned work:
+- Phase 3: subscription gating (backend + frontend), public performance pages, and base schema for predictions/results/parlays.
+
+Notes:
+- Hydration warnings earlier were due to browser extension attributes (e.g., Grammarly). Disable the extension for localhost or we can add suppressHydrationWarning in layout if needed.
