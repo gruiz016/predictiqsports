@@ -1,0 +1,49 @@
+name: dev-journal-check
+
+on:
+  push:
+    branches: [ main, dev ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract last commit message
+        id: msg
+        run: |
+          MSG="$(git log -1 --pretty=%B)"
+          echo "message<<EOF" >> $GITHUB_OUTPUT
+          echo "$MSG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Find Journal line
+        id: journal
+        run: |
+          JOURNAL_PATH=$(printf "%s" "${{ steps.msg.outputs.message }}" | grep -iE '^Journal:' | head -n1 | sed -E 's/^Journal:\s*//')
+          echo "journal_path=$JOURNAL_PATH" >> $GITHUB_OUTPUT
+          if [ -z "$JOURNAL_PATH" ]; then
+            echo "ERROR: Commit message must include a 'Journal: <path>' line pointing to a .txt file in docs/journal/."
+            exit 1
+          fi
+
+      - name: Verify journal file exists
+        run: |
+          PATH_TO_CHECK="${{ steps.journal.outputs.journal_path }}"
+          if [ ! -f "$PATH_TO_CHECK" ]; then
+            echo "ERROR: Referenced Dev Journal file not found at '$PATH_TO_CHECK'."
+            echo "Please add the .txt and amend the commit."
+            exit 1
+          fi
+          if ! echo "$PATH_TO_CHECK" | grep -qE '\.txt$'; then
+            echo "ERROR: Dev Journal must be a .txt file."
+            exit 1
+          fi
+          if ! echo "$PATH_TO_CHECK" | grep -q '^docs/journal/'; then
+            echo "ERROR: Dev Journal must live under docs/journal/."
+            exit 1
+          fi
+          echo "Dev Journal found: $PATH_TO_CHECK"

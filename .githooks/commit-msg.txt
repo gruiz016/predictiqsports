@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Non-blocking reminder to include a Dev Journal reference.
+# Usage: installed via scripts/install-hooks.sh (core.hooksPath = .githooks)
+
+MSG_FILE="$1"
+MSG="$(cat "$MSG_FILE")"
+
+# Allow bypass
+if echo "$MSG" | grep -qi "\[skip-journal\]"; then
+  exit 0
+fi
+
+# Require 'Journal:' line, non-blocking (reminder only)
+if ! echo "$MSG" | grep -qiE '^Journal:'; then
+  echo ""
+  echo "⚠️  Reminder: Please include a Dev Journal line in your commit message."
+  echo "   Example: Journal: docs/journal/$(date +%F)-<shortsha>-dev-journal.txt"
+  echo "   To bypass for trivial commits, include [skip-journal]."
+  echo ""
+  # Do NOT block the commit
+  exit 0
+fi
+
+exit 0

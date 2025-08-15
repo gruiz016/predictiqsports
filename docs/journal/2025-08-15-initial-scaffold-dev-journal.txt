@@ -1,0 +1,68 @@
+Dev Journal — 2025-08-15 — Initial Scaffold
+========================================
+
+Commit:
+  SHA: <to be determined>
+  Author: You
+  Date/Time (ET): 2025-08-15
+  Branch: main
+
+Summary:
+  - Added monorepo skeleton, Dev Journal system (local reminder + CI enforcement), FastAPI MVP stubs, Next.js public pages, SQL schema draft.
+
+Decision Log:
+  - Start with non-breaking API stubs (DEV_SKIP_AUTH) to avoid blocking UI.
+  - CI enforces Journal on main; local hook is a reminder (non-blocking).
+
+Files/Paths:
+  - SETUP_00_README.txt
+  - .gitignore
+  - docs/journal/_template.txt
+  - docs/journal/README.md.txt
+  - .githooks/commit-msg
+  - scripts/install-hooks.sh
+  - .github/workflows/dev-journal-check.yml
+  - infra/sql/0001_init.sql
+  - api/app/main.py, api/requirements.txt, api/.env.example
+  - web/.env.local.example
+  - web/src/app/(page.tsx, track-record/page.tsx, accuracy/page.tsx, dashboard/page.tsx, parlay/page.tsx)
+  - web/src/lib/api.ts
+
+API Changes:
+  - Added endpoints:
+    GET /health
+    GET /v1/predictions/history (public, stub)
+    GET /v1/accuracy (public, stub)
+    GET /v1/predictions/today (paid, stub; gated by require_auth that can be bypassed in dev)
+    POST /v1/parlays/evaluate (paid; EV calculator)
+
+Data Model / Migrations:
+  - Introduced core tables; prediction_archive is append-only via trigger.
+  - Hash-chain field exists but computed by backend later.
+
+Env/Secrets:
+  - api/.env: DEV_SKIP_AUTH, CORS, DATABASE_URL (optional), STRIPE keys.
+
+Backward compatibility:
+  - [x] No breaking changes (MVP stubs).
+
+Test Plan:
+  - Built and ran API (uvicorn) with DEV_SKIP_AUTH=true.
+  - Next.js pages fetch stub endpoints successfully.
+
+Deployment steps:
+  1) Push repo; configure Vercel (web) & Railway/Render (api).
+  2) Set env vars in each platform.
+  3) Apply SQL to managed Postgres (if using cloud DB).
+
+Rollback:
+  - git revert <sha> or redeploy previous tag.
+
+Next Steps:
+  - Implement real DB layer (SQLAlchemy) and wire history/accuracy from DB.
+  - Add auth (Supabase/NextAuth) + Stripe checkout endpoints.
+  - Replace stubs with model publisher + outcomes ingestor.
+
+Open Questions:
+  - Choose DB host (Supabase vs Railway vs RDS)?
+  - Pick Auth provider (Supabase Auth vs NextAuth)?

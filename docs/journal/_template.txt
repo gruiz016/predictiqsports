@@ -1,0 +1,47 @@
+Dev Journal — TEMPLATE (copy this file per commit)
+=================================================
+
+Commit:
+  SHA: <fill after commit or leave blank until PR>
+  Author:
+  Date/Time (ET):
+  Branch:
+
+Summary (what changed and why):
+  -
+
+Decision Log (from chat + rationale):
+  -
+
+Files/Paths touched:
+  -
+
+API Changes (added/updated/removed):
+  -
+
+Data Model / Migrations:
+  -
+
+Env/Secrets changes:
+  -
+
+Backward compatibility:
+  - [ ] No breaking changes
+  - [ ] Breaking change (explain) + mitigation/feature flag:
+    Flag name(s):
+
+Test Plan (what you ran to avoid breaking dev):
+  - Build:
+  - Unit/Smoke:
+  - Manual checks:
+
+Deployment steps:
+  1.
+Rollback plan:
+  - git revert <sha> OR deploy previous tag vX.Y.Z
+
+Next Steps:
+  -
+
+Open Questions:
+  -
