@@ -12,6 +12,10 @@ export function getToken(): string | null {
   if (typeof window === "undefined") return null;
   return localStorage.getItem(STORAGE_KEY);
 }
+export function logout(): void {
+  // Clear our token; add other clears here later if needed
+  setToken(null);
+}
 
 export const api = axios.create({ baseURL: API_URL, timeout: 15000 });
 api.interceptors.request.use((config) => {
@@ -21,7 +25,7 @@ api.interceptors.request.use((config) => {
 });
 
 // ---------- Public ----------
-export async function fetchHistory(): Promise<any[]> {
+export async function fetchHistory() {
   const res = await api.get("/v1/predictions/history");
   const d = res.data;
   if (Array.isArray(d)) return d;
@@ -30,7 +34,6 @@ export async function fetchHistory(): Promise<any[]> {
   if (d && Array.isArray(d.data)) return d.data;
   return [];
 }
-
 export async function fetchAccuracy(window: string = "30d") {
   const res = await api.get("/v1/accuracy", { params: { window } });
   return res.data;

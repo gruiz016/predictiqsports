@@ -1,0 +1,12 @@
+Dev Journal — 2025-08-15 — Add Pro (subscription-active) gating on web
+Summary:
+- Added client-side subscription checks using /v1/billing/status.
+- Created reusable RequirePro wrapper component; used on /dashboard and /parlay.
+- Pages still require JWT; now also show upgrade CTA if subscription is not "active".
+
+Files:
+- web/src/lib/api.ts
+- web/src/hooks/useBillingStatus.ts
+- web/src/components/RequirePro.tsx
+- web/src/app/dashboard/page.tsx
+- web/src/app/parlay/page.tsx

@@ -1,0 +1,14 @@
+Dev Journal — 2025-08-15 — Add sign-out flow
+Summary:
+- Added logout() helper that clears JWT from localStorage.
+- Added /logout page that clears token on mount and redirects to /login.
+- Added SignOutButton component for use in headers or account page.
+
+Files:
+- web/src/lib/api.ts
+- web/src/app/logout/page.tsx
+- web/src/components/SignOutButton.tsx
+
+How to test:
+- Visit /logout directly or place <SignOutButton/> in your header.
+- After sign-out, navigating to /dashboard or /parlay should redirect to /login, then show upgrade CTA post-login if not subscribed.
