@@ -1,0 +1,12 @@
+Dev Journal — 2025-08-15 — Fix account imports and track-record import path
+Summary:
+- Updated web/src/lib/api.ts to include getBillingStatus, openPortal, syncCheckout.
+- Replaced account page to import getBillingStatus/openPortal/syncCheckout.
+- Fixed track-record page to import from "@/lib/api" and use fetchHistory (not "@/src/lib/api" or getHistory).
+
+Files:
+- web/src/lib/api.ts
+- web/src/app/account/page.tsx
+- web/src/app/track-record/page.tsx
+
+No breaking changes. Verified compile succeeds and /account + /track-record load.

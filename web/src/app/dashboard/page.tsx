@@ -1,17 +1,57 @@
 // web/src/app/dashboard/page.tsx
 "use client";
+import RequireActive from "@/src/components/RequireActive";
 import { useEffect, useState } from "react";
-import { fetchTodaysPredictions, getToken } from "@/lib/api";
-import { useRouter } from "next/navigation";
-export default function DashboardPage(){
-  const [data,setData]=useState<any[]|null>(null); const [error,setError]=useState<string|null>(null); const router=useRouter();
-  useEffect(()=>{ const t=getToken(); if(!t){ router.push("/login"); return; } fetchTodaysPredictions().then(setData).catch((err)=>setError(err?.response?.data?.detail||"Failed to load predictions")); },[router]);
-  if(!getToken()) return null;
-  return (<main className="p-8 max-w-5xl mx-auto"><h1 className="text-2xl font-bold mb-4">Today’s Predictions</h1>
-    {error && <div className="text-red-600 text-sm mb-4">{error}</div>}
-    {!data ? <div>Loading…</div> : <div className="grid gap-4">{data.map((p:any)=>(
-      <div key={p.game_id} className="border rounded p-4"><div className="font-semibold">{p.away} @ {p.home} — {p.date}</div>
-      <div className="text-sm mt-2">Home win prob: {(p.p_home_win*100).toFixed(1)}%</div>
-      <div className="text-sm">Expected total: {p.expected_total ?? "—"}</div>
-      <div className="text-sm">Confidence: {p.confidence ? (p.confidence*100).toFixed(1) + "%" : "—"}</div></div>))}</div>}
-  </main>); }
+import { getTodayPredictions } from "@/src/lib/api";
+
+export default function DashboardPage() {
+  const [data, setData] = useState<any[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await getTodayPredictions();
+        setData(res);
+      } catch (e: any) {
+        setError(e?.message || "Failed to load predictions");
+      }
+    })();
+  }, []);
+
+  return (
+    <RequireActive>
+      <div className="p-6 space-y-4">
+        <h1 className="text-2xl font-semibold">Today’s Predictions</h1>
+        {error && <div className="text-red-600 text-sm">{error}</div>}
+        {!data && !error && <div>Loading…</div>}
+        {data && (
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="text-left border-b">
+                  <th className="py-2 pr-4">Game</th>
+                  <th className="py-2 pr-4">Pick</th>
+                  <th className="py-2 pr-4">Predicted</th>
+                  <th className="py-2 pr-4">Confidence</th>
+                  <th className="py-2 pr-4">Odds</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.map((r, i) => (
+                  <tr key={i} className="border-b last:border-0">
+                    <td className="py-2 pr-4">{r.away_team} @ {r.home_team}</td>
+                    <td className="py-2 pr-4">{r.pick}</td>
+                    <td className="py-2 pr-4">{r.predicted_score_away ?? "–"}–{r.predicted_score_home ?? "–"}</td>
+                    <td className="py-2 pr-4">{(r.model_confidence ?? 0)*100}%</td>
+                    <td className="py-2 pr-4">{r.odds_american ?? ""}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </RequireActive>
+  );
+}

@@ -1,53 +1,63 @@
 // web/src/app/parlay/page.tsx
 "use client";
-
+import RequireActive from "@/src/components/RequireActive";
 import { useState } from "react";
-import { api } from "@/lib/api";
+import { buildParlay } from "@/src/lib/api";
+
+type Pick = { market: string; selection: string; odds_type: "american"|"decimal"; odds: number };
 
 export default function ParlayPage() {
-  const [stake, setStake] = useState(1000);
-  const [result, setResult] = useState<any>(null);
-  const [legs, setLegs] = useState<any[]>([
-    { game_id: "uuid-today-1", market: "ML", selection: "HOME", price_decimal: 1.7, leg_probability: 0.6 },
-    { game_id: "uuid-today-2", market: "TOTAL", selection: "OVER", line: 8.5, price_decimal: 1.95, leg_probability: 0.55 }
+  const [picks, setPicks] = useState<Pick[]>([
+    { market: "ML", selection: "NYY ML", odds_type: "american", odds: -135 },
   ]);
+  const [stake, setStake] = useState(10);
+  const [result, setResult] = useState<any | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  async function evaluate() {
-    const res = await api.post("/v1/parlays/evaluate", { stake_cents: stake, legs });
-    setResult(res.data);
-  }
+  const addPick = () => setPicks([...picks, { market: "ML", selection: "", odds_type: "american", odds: 100 }]);
+  const updatePick = (i: number, v: Partial<Pick>) => setPicks(picks.map((p, idx) => (idx === i ? { ...p, ...v } : p)));
+
+  const calculate = async () => {
+    setError(null); setResult(null);
+    try {
+      const res = await buildParlay({ stake, picks });
+      setResult(res);
+    } catch (e: any) {
+      setError(e?.message || "Failed to build parlay");
+    }
+  };
 
   return (
-    <main className="p-8 max-w-3xl mx-auto">
-      <h1 className="text-2xl font-bold mb-4">Parlay Builder</h1>
-
-      <div className="border rounded p-4">
-        <label className="block text-sm mb-1">Stake (cents)</label>
-        <input className="border rounded p-2 w-full"
-          type="number" value={stake} onChange={e => setStake(parseInt(e.target.value || "0", 10))}/>
-      </div>
-
-      <div className="mt-4 space-y-2">
-        <div className="text-sm opacity-70">Sample legs (MVP)</div>
-        {legs.map((l, i) => (
-          <div key={i} className="border rounded p-3 text-sm">
-            <div>Market: {l.market}, Selection: {l.selection}</div>
-            <div>Decimal Odds: {l.price_decimal}, P(leg): {Math.round(l.leg_probability*100)}%</div>
-            {l.line ? <div>Line: {l.line}</div> : null}
+    <RequireActive>
+      <div className="p-6 space-y-4">
+        <h1 className="text-2xl font-semibold">Parlay Builder</h1>
+        {picks.map((p, i) => (
+          <div key={i} className="grid grid-cols-1 md:grid-cols-4 gap-2 items-center">
+            <input className="border rounded-xl px-3 py-2" value={p.market} onChange={e=>updatePick(i,{market:e.target.value})} placeholder="Market" />
+            <input className="border rounded-xl px-3 py-2" value={p.selection} onChange={e=>updatePick(i,{selection:e.target.value})} placeholder="Selection" />
+            <select className="border rounded-xl px-3 py-2" value={p.odds_type} onChange={e=>updatePick(i,{odds_type:e.target.value as any})}>
+              <option value="american">American</option>
+              <option value="decimal">Decimal</option>
+            </select>
+            <input className="border rounded-xl px-3 py-2" type="number" value={p.odds} onChange={e=>updatePick(i,{odds: Number(e.target.value)})} placeholder="Odds" />
           </div>
         ))}
-      </div>
-
-      <button className="mt-4 border rounded p-2" onClick={evaluate}>Evaluate EV</button>
-
-      {result && (
-        <div className="mt-4 border rounded p-4">
-          <div>Combined odds: {result.combined_decimal_odds}</div>
-          <div>P(parlay win): {(result.p_parlay_win*100).toFixed(2)}%</div>
-          <div>Expected value: {result.expected_value_cents}¢ ({result.ev_positive ? "✅ positive" : "❌ negative"})</div>
+        <div className="flex gap-2">
+          <button onClick={addPick} className="px-3 py-2 rounded-xl border">+ Add leg</button>
+          <input className="border rounded-xl px-3 py-2" type="number" value={stake} onChange={e=>setStake(Number(e.target.value))} placeholder="Stake" />
+          <button onClick={calculate} className="px-4 py-2 rounded-xl bg-black text-white">Calculate</button>
         </div>
-      )}
-      <p className="mt-6 text-sm opacity-70">Gating + correlation adjustments coming in Phase 3.</p>
-    </main>
+        {error && <div className="text-red-600 text-sm">{error}</div>}
+        {result && (
+          <div className="p-4 rounded-2xl border inline-block">
+            <div>Legs: <b>{result.legs}</b></div>
+            <div>Combined decimal: <b>{result.combined_decimal}</b></div>
+            <div>Combined American: <b>{result.combined_american}</b></div>
+            <div>Potential payout: <b>${result.potential_payout}</b></div>
+            <div>Potential profit: <b>${result.potential_profit}</b></div>
+          </div>
+        )}
+      </div>
+    </RequireActive>
   );
 }

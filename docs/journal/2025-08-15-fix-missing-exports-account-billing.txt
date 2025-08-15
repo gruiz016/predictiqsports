@@ -1,0 +1,12 @@
+Dev Journal — 2025-08-15 — Fix missing exports & add billing endpoints
+Summary:
+- Implemented /v1/billing/status, /v1/billing/portal-session, /v1/billing/sync-checkout.
+- Updated web client API with getBillingStatus, openPortal, syncCheckout.
+- Replaced /account page to use these helpers and handle Stripe success redirects.
+
+Files:
+- api/app/routers_billing.py
+- web/src/lib/api.ts
+- web/src/app/account/page.tsx
+
+No breaking changes. Test: complete checkout → /account?status=success&session_id=... → status shows active; open billing portal works.

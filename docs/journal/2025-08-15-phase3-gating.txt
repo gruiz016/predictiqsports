@@ -1,0 +1,20 @@
+Dev Journal — 2025-08-15 — Phase 3: Subscription Gating
+-------------------------------------------------------------
+Backend:
+- Added access.require_active_subscription() to enforce premium access.
+- New routers:
+  - /v1/predictions/today (protected)
+  - /v1/predictions/history (public)
+  - /v1/parlay/build (protected), supports American & decimal odds; returns combined odds, payout, profit.
+- Updated main.py to register new routers.
+
+Frontend:
+- RequireActive component checks /v1/billing/status and shows a Subscribe CTA for inactive users.
+- Dashboard rewired to fetch protected /v1/predictions/today.
+- Parlay page integrated with /v1/parlay/build.
+- Public pages: /track-record and /accuracy (placeholder).
+
+Next steps (Phase 4):
+- Introduce DB tables (games, predictions, results, parlays) + migrations.
+- Wire predictions today/history endpoints to DB.
+- Implement ROI/accuracy endpoint and render charts.

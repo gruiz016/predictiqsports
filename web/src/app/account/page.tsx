@@ -1,66 +1,58 @@
 // web/src/app/account/page.tsx
 "use client";
+
 import { useEffect, useState } from "react";
-import { billingStatus, portalSession, syncCheckout } from "@/lib/api";
+import { getBillingStatus, openPortal, syncCheckout } from "@/lib/api";
 import { useSearchParams } from "next/navigation";
-import Link from "next/link";
+
+type Billing = { status: string; plan?: string | null; current_period_end?: string | null; stripe_customer_id?: string | null };
 
 export default function AccountPage(){
-  const [status,setStatus] = useState<any|null>(null);
-  const [err,setErr] = useState<string|null>(null);
-  const [working,setWorking] = useState(false);
+  const [billing, setBilling] = useState<Billing | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const search = useSearchParams();
 
-  async function load(){
-    setErr(null);
-    try{ const data = await billingStatus(); setStatus(data); }
-    catch(e:any){ setErr(e?.response?.data?.detail || e?.message || "Failed to fetch status"); }
-  }
+  useEffect(() => {
+    const run = async () => {
+      try {
+        const status = search.get("status");
+        const session_id = search.get("session_id");
+        if (status === "success" && session_id) {
+          await syncCheckout(session_id);
+        }
+        const b = await getBillingStatus();
+        setBilling(b);
+      } catch (e: any) {
+        setError(e?.response?.data?.detail || "Failed to load billing status");
+      }
+    };
+    run();
+  }, [search]);
 
-  async function manageBilling(){
-    setWorking(true); setErr(null);
-    try{ const { url } = await portalSession(); window.location.href = url; }
-    catch(e:any){ setErr(e?.response?.data?.detail || e?.message || "Failed to open portal"); }
-    finally{ setWorking(false); }
-  }
-
-  useEffect(()=>{
-    const sid = search.get("session_id");
-    if(sid){
-      // One-time sync after returning from Stripe
-      syncCheckout(sid).finally(load);
-    }else{
-      load();
+  async function handlePortal(){
+    try {
+      const { url } = await openPortal();
+      window.location.href = url;
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || "Could not open billing portal");
     }
-  },[search]);
+  }
 
   return (
     <main className="p-8 max-w-2xl mx-auto">
-      <h1 className="text-2xl font-bold mb-2">Account</h1>
-      <p className="opacity-70 text-sm mb-4">This page shows your subscription status after Stripe checkout.</p>
-
-      {err && <div className="mb-3 text-sm text-red-700 border border-red-500 rounded p-2">{err}</div>}
-
-      {!status ? <div>Loading…</div> : (
-        <div className="border rounded p-4 space-y-2">
-          <div><span className="font-semibold">Active:</span> {String(status.active)}</div>
-          <div><span className="font-semibold">Status:</span> {status.status ?? "—"}</div>
-          <div><span className="font-semibold">Plan:</span> {status.plan ?? "—"}</div>
-          <div><span className="font-semibold">Current period end:</span> {status.current_period_end ?? "—"}</div>
-          {!status.active ? (
-            <div className="pt-2">
-              <Link href="/pricing" className="underline">Subscribe now</Link>
-            </div>
-          ) : (
-            <div className="pt-2">
-              <button onClick={manageBilling} className="border rounded p-2" disabled={working}>
-                {working ? "Opening portal…" : "Manage billing"}
-              </button>
-            </div>
-          )}
-          <div className="pt-2">
-            <button onClick={load} className="border rounded p-2">Refresh status</button>
+      <h1 className="text-2xl font-bold mb-4">Account</h1>
+      {error && <div className="text-red-600 text-sm mb-4">{error}</div>}
+      {!billing ? <div>Loading…</div> : (
+        <div className="space-y-2">
+          <div><span className="font-semibold">Status:</span> {billing.status}</div>
+          <div><span className="font-semibold">Plan:</span> {billing.plan ?? "—"}</div>
+          <div><span className="font-semibold">Renews:</span> {billing.current_period_end ?? "—"}</div>
+          <div className="mt-4">
+            <button className="border rounded p-2" onClick={handlePortal} disabled={!billing.stripe_customer_id}>
+              Open Billing Portal
+            </button>
           </div>
+          <p className="text-sm opacity-70 mt-2">Use the billing portal to update payment method or cancel.</p>
         </div>
       )}
     </main>
