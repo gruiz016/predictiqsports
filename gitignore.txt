@@ -1,0 +1,27 @@
+\
+# Node / Next.js
+web/node_modules
+web/.next
+web/out
+web/.vercel
+
+# Python
+api/.venv
+api/__pycache__/
+
+# Env files
+**/.env
+**/.env.local
+**/.env.*.local
+
+# OS / editor
+.DS_Store
+*.log
+
+# Python cache
+**/__pycache__/
+*.pyc
+
+# SQLite (if ever used)
+*.sqlite
+*.db
